@@ -22,7 +22,7 @@ import binascii
 import cPickle as pickle
 import re
 
-SHARED_PASSWORD = hashlib.sha1("feiwu").digest()
+SHARED_PASSWORD = hashlib.sha1("password").digest()
 TUNSETIFF = 0x400454ca
 IFF_TUN   = 0x0001 | 0x1000 #TUN + NO_PI
 
