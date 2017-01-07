@@ -1,0 +1,54 @@
+#!/bin/bash
+
+date="`date '+%Y-%m-%d %H:%M:%S'`"
+process="vpn.py"
+server=192.168.128.1
+
+do_server(){
+    while :
+    do
+      check_proc $process server
+      sleep 29
+    done
+}
+
+do_client(){
+    while :
+    do
+      check_connect $server client
+      sleep 59
+    done
+}
+
+check_connect(){
+  check_function=`ping -c 8 -w 8 $1 | grep 'packet loss' | awk -F'packet loss' '{ print $1 }' | awk '{ print $NF }' | sed 's/%//g'`
+
+  if [ $check_function -ge 60 ]; then
+    bash /usr/local/udpvpn/run $2
+    service dnsmasq restart
+    echo "$date network status error! reconnect server" >>/var/log/udpvpn_check.log
+  else
+    echo "$date network status ok! packet loss rate: ${check_function}%" >>/var/log/udpvpn_check.log
+  fi
+
+}
+
+check_proc(){
+  check_function=`ps -ef |grep $1 |grep -v grep|awk '{print $5}'`
+
+  if [ "$check_function" = "" ]; then
+    bash /usr/local/udpvpn/run $2
+    echo "$date process status error! restart server" >>/var/log/udpvpn_check.log
+  else
+    echo "$date process status ok! uptime: ${check_function}" >>/var/log/udpvpn_check.log
+  fi
+}
+
+case "$1" in
+server)
+    do_server
+    ;;
+client)
+    do_client
+    ;;
+esac

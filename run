@@ -1,0 +1,53 @@
+#!/bin/bash
+
+date="`date '+%Y-%m-%d %H:%M:%S'`"
+port=16393
+connect=119.9.95.88
+server_tun=192.168.128.1
+client_tun=192.168.128.28
+
+tun_gw=${client_tun%.[0-9]*}.1
+old_gw=`ip route show 0/0 | sort -k 7 | head -n 1 | sed -e 's/.* via \([^ ]*\).*/\1/'`
+
+do_firewall(){
+    args=$1
+    iptables -t nat --${args} POSTROUTING -s ${server_tun%.[0-9]*}.0/24 ! -d ${server_tun%.[0-9]*}.0/24 -m comment --comment "stateless vpn" -j MASQUERADE
+    iptables --${args} FORWARD -s ${server_tun%.[0-9]*}.0/24 -m state --state RELATED,ESTABLISHED -j ACCEPT
+    iptables --${args} FORWARD -d ${server_tun%.[0-9]*}.0/24 -j ACCEPT
+    iptables -t mangle --${args} FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+}
+
+do_server(){
+    kill -9 `ps -ef |grep vpn.py|awk '{print $2}'` >/dev/null 2>&1
+    do_firewall delete
+    sleep 1
+    python /usr/local/udpvpn/vpn.py -s $port -l $server_tun >/dev/null 2>&1 &
+    do_firewall append
+    exit 1
+}
+
+do_client(){
+    kill -9 `ps -ef |grep vpn.py|awk '{print $2}'` >/dev/null 2>&1
+    do_firewall delete
+    sleep 1
+    python /usr/local/udpvpn/vpn.py -c $connect,$port -l $client_tun -p $tun_gw >/dev/null 2>&1 &
+    do_firewall append
+    sleep 5
+    do_route
+    exit 1
+}
+
+do_route(){
+    ip route add $connect via $old_gw
+    /usr/local/udpvpn/route $tun_gw
+    exit 1
+}
+
+case "$1" in
+server)
+    do_server
+    ;;
+client)
+    do_client
+    ;;
+esac
